@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+	<title>NYC</title>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+
+	<!-- Mapzen CSS API -->
+	<link rel="stylesheet" href="https://mapzen.com/js/mapzen.css">
+
+	<!-- Leaflet CSS API -->
+	<!-- NECESSARY??????????? -->
+	<link rel="stylesheet" href="https://unpkg.com/leaflet@1.0.3/dist/leaflet.css" integrity="sha512-07I2e+7D8p6he1SIM+1twR5TIrhUQn9+I6yjqD53JQjFiMf8EtC93ty0/5vJTZGF8aAocvHYNEDJajGdNx1IsQ==" crossorigin=""/>
+
+	<!-- jQuery API CDN -->
+	<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+
+	<!-- Mapzen/Leaflet JS API CDN -->
+	<script src="https://mapzen.com/js/mapzen.min.js"></script>
+
+
+	<!-- Link to config.s file storing API keys -->
+	<script type="text/javascript" src="config.js"></script>
+
+
+
+	<!-- Leaflet JS API CDN -->
+	<!-- 
+
+	Is this necessary with Mapzen API??????????? 
+
+	No, Mapzen API does not work with this included
+
+	-->
+	<!-- <script src="https://unpkg.com/leaflet@1.0.3/dist/leaflet.js" integrity="sha512-A7vV8IFfih/D732iSSKi20u/ooOfj/AGehOKq0f4vLT1Zr2Y+RX7C+w8A1gaSasGtRUZpF/NZgzSAu4/Gc41Lg==" crossorigin=""></script> -->
+
+	<style type="text/css">
+		#map {
+		height: 100%;
+		width: 100%;
+		position: absolute;
+		}
+		html,body{margin: 0; padding: 0;}
+	</style>
+	</head>
+	<body>
+		<div id="map"></div>
+		<script>
+
+			// Retrieve API key and username from config.js
+			var cartoUser = config.CARTO_USER;
+			var mapzenKey = config.MAPZEN_KEY;
+
+
+			// Declare Mapzen API key
+			L.Mapzen.apiKey = mapzenKey;
+
+			// Adds map to page with integrated Leaflet API using Mapzen API for base map data
+			var map = L.Mapzen.map('map', {
+				center: [40.7128, -74.0059],	// sets initial centerpoint of map
+				zoom: 13						// sets initial zoom (zoom buttons also included by default)
+			});
+
+			// Adds a scale to the map in the bottom left corner
+			L.control.scale().addTo(map);
+
+			// Adds search functionality from Mapzen with Leaflet in top left corner
+			// var geocoder = L.Mapzen.geocoder('mapzen-6fZzCy1', {
+			// 	params: {
+			// 		sources: 'osm',				// restricts search options to OpenStreetMaps (OSM)
+			// 		'boundary.country': 'USA'	// restricts search options to within USA
+			// 	}
+			// });
+			// geocoder.addTo(map);
+
+			// Add layer of map data to map
+			//var manhattanLayer = L.geoJson(null).addTo(map);
+
+			// GLOBAL VARIABLES
+			var manhattanLayer = null;
+
+
+			// SQL queries for tests
+			var sqlQuery = "SELECT * FROM manhattan_signs";
+			var sqlQueryNoParkingTaxiStand = "SELECT * FROM manhattan_signs WHERE sign_desc='NO PARKING TAXI STAND'";	// 3 results
+			var sqlQueryNoParkingAnytime = "SELECT * FROM manhattan_signs WHERE sign_desc='NO PARKING ANYTIME'";		// 1885 results
+
+			var sqlProxFlatiron = "SELECT * FROM manhattan_signs WHERE ST_DWithin(manhattan_signs.the_geom::geography,(select the_geom from flatiron where cartodb_id=1)::geography,10)"
+
+			// Endpoint for CARTO SQL API
+			var endpoint = "https://" + cartoUser + ".carto.com/api/v2/sql?format=GeoJSON&q=";
+
+			// Full url to use in $.getJSON call
+			var url = endpoint + sqlQueryNoParkingTaxiStand;
+
+
+			// Displays signs per SQL query to CARTO tables API
+			function showSigns(){
+
+				console.log("showSigns() started");
+
+				// Remove any pre-existing layer
+				// if(map.hasLayer(mSignLocations)){
+				// 	map.removeLayer(mSignLocations);
+				// };
+
+				// Get data from CARTO in GeoJSON format and add to map
+				// Run function that applies GeoJSON to map and creates point marker that includes sign_desc
+				$.getJSON("https://"+cartoUser+".carto.com/api/v2/sql?format=GeoJSON&q="+sqlQueryNoParkingTaxiStand, function(data) {
+					console.log("$.getJSON called");
+					mSignLocations = L.geoJson(data, {
+						onEachFeature: function(feature, layer) {
+							console.log("sign_desc: " + feature.properties.sign_desc);
+							layer.bindPopup('<p>' + feature.properties.sign_desc + '</p>');
+						}
+					}).addTo(map);
+				})
+				// Alert when getJSON succeeds
+				.done(function() {
+					alert( "$.getJSON succeeded");
+				})
+				// Alert when getJSON fails
+				.fail(function() {
+					alert( "$.getJSON failed");
+				});
+				console.log("showSigns() ended");
+			};
+
+			// jQuery function that checks if entire DOM has loaded before proceding
+			$( document ).ready(function() {
+				console.log("document ready!");
+				// Run showSigns function automatically when document is fully loaded
+				showSigns();
+				//console.log("document script finished");
+			});
+
+
+		</script>
+	</body>
+</html>
