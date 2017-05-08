@@ -77,7 +77,7 @@
 			//var manhattanLayer = L.geoJson(null).addTo(map);
 
 			// GLOBAL VARIABLES
-			var manhattanLayer = null;
+			var mSignLayer;
 
 
 			// SQL queries for tests
@@ -85,13 +85,13 @@
 			var sqlQueryNoParkingTaxiStand = "SELECT * FROM manhattan_signs WHERE sign_desc='NO PARKING TAXI STAND'";	// 3 results
 			var sqlQueryNoParkingAnytime = "SELECT * FROM manhattan_signs WHERE sign_desc='NO PARKING ANYTIME'";		// 1885 results
 
-			var sqlProxFlatiron = "SELECT * FROM manhattan_signs WHERE ST_DWithin(manhattan_signs.the_geom::geography,(select the_geom from flatiron where cartodb_id=1)::geography,10)"
+			var sqlProxFlatiron = "SELECT * FROM manhattan_signs WHERE ST_DWithin(manhattan_signs.the_geom::geography,(select the_geom from flatiron where cartodb_id=1)::geography,50)"
 
 			// Endpoint for CARTO SQL API
 			var endpoint = "https://" + cartoUser + ".carto.com/api/v2/sql?format=GeoJSON&q=";
 
 			// Full url to use in $.getJSON call
-			var url = endpoint + sqlQueryNoParkingTaxiStand;
+			var url = endpoint + sqlProxFlatiron;
 
 
 			// Displays signs per SQL query to CARTO tables API
@@ -100,15 +100,15 @@
 				console.log("showSigns() started");
 
 				// Remove any pre-existing layer
-				// if(map.hasLayer(mSignLocations)){
-				// 	map.removeLayer(mSignLocations);
-				// };
+				if(map.hasLayer(mSignLayer)){
+					map.removeLayer(mSignLayer);
+				};
 
 				// Get data from CARTO in GeoJSON format and add to map
 				// Run function that applies GeoJSON to map and creates point marker that includes sign_desc
-				$.getJSON("https://"+cartoUser+".carto.com/api/v2/sql?format=GeoJSON&q="+sqlQueryNoParkingTaxiStand, function(data) {
+				$.getJSON(url, function(data) {
 					console.log("$.getJSON called");
-					mSignLocations = L.geoJson(data, {
+					mSignLayer = L.geoJson(data, {
 						onEachFeature: function(feature, layer) {
 							console.log("sign_desc: " + feature.properties.sign_desc);
 							layer.bindPopup('<p>' + feature.properties.sign_desc + '</p>');
@@ -117,7 +117,8 @@
 				})
 				// Alert when getJSON succeeds
 				.done(function() {
-					alert( "$.getJSON succeeded");
+					console.log("$geoJSON succeeded");
+					// alert( "$.getJSON succeeded");
 				})
 				// Alert when getJSON fails
 				.fail(function() {
