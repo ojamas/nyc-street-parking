@@ -23,24 +23,23 @@
 	<script type="text/javascript" src="config.js"></script>
 
 
-
-	<!-- Leaflet JS API CDN -->
-	<!-- 
-
-	Is this necessary with Mapzen API??????????? 
-
-	No, Mapzen API does not work with this included
-
-	-->
-	<!-- <script src="https://unpkg.com/leaflet@1.0.3/dist/leaflet.js" integrity="sha512-A7vV8IFfih/D732iSSKi20u/ooOfj/AGehOKq0f4vLT1Zr2Y+RX7C+w8A1gaSasGtRUZpF/NZgzSAu4/Gc41Lg==" crossorigin=""></script> -->
-
 	<style type="text/css">
 		#map {
-		height: 100%;
-		width: 100%;
-		position: absolute;
+			height: 100%;
+			width: 100%;
+			position: absolute;	
 		}
+
 		html,body{margin: 0; padding: 0;}
+
+		.info {
+		    padding: 6px 8px;
+		    font: 14px/16px Arial, Helvetica, sans-serif;
+		    background: white;
+		    background: rgba(255,255,255,0.8);
+		    box-shadow: 0 0 15px rgba(0,0,0,0.2);
+		    border-radius: 5px;
+		}
 	</style>
 	</head>
 	<body>
@@ -57,8 +56,8 @@
 
 			// Adds map to page with integrated Leaflet API using Mapzen API for base map data
 			var map = L.Mapzen.map('map', {
-				center: [40.7128, -74.0059],	// sets initial centerpoint of map
-				zoom: 13						// sets initial zoom (zoom buttons also included by default)
+				center: [40.741368, -73.989428],	// sets initial centerpoint of map
+				zoom: 18						// sets initial zoom (zoom buttons also included by default)
 			});
 
 			// Adds a scale to the map in the bottom left corner
@@ -76,16 +75,32 @@
 			// Add layer of map data to map
 			//var manhattanLayer = L.geoJson(null).addTo(map);
 
-			// GLOBAL VARIABLES
+
+
+
+			// -------------------- GLOBAL VARIABLES ----------------------
+			
+			// Manhattan sign layer
 			var mSignLayer;
+
+			// Options for Leaflet circleMarker
+			var signMarkerOptions = {
+				radius: 8,
+				fillColor: "#36a03d",
+				color: "#000",
+				weight: 1,
+				opacity: 1,
+				fillOpacity: 0.8
+			};
+
 
 
 			// SQL queries for tests
-			var sqlQuery = "SELECT * FROM manhattan_signs";
-			var sqlQueryNoParkingTaxiStand = "SELECT * FROM manhattan_signs WHERE sign_desc='NO PARKING TAXI STAND'";	// 3 results
-			var sqlQueryNoParkingAnytime = "SELECT * FROM manhattan_signs WHERE sign_desc='NO PARKING ANYTIME'";		// 1885 results
+			var sqlAllMSigns = "SELECT * FROM manhattan_signs";
+			var sqlMNoParkingTaxiStand = "SELECT * FROM manhattan_signs WHERE sign_desc='NO PARKING TAXI STAND'";	// 3 results
+			var sqlMNoParkingAnytime = "SELECT * FROM manhattan_signs WHERE sign_desc='NO PARKING ANYTIME'";		// 1885 results
 
-			var sqlProxFlatiron = "SELECT * FROM manhattan_signs WHERE ST_DWithin(manhattan_signs.the_geom::geography,(select the_geom from flatiron where cartodb_id=1)::geography,50)"
+			var sqlProxFlatiron = "SELECT * FROM manhattan_signs WHERE ST_DWithin(manhattan_signs.the_geom::geography,(select the_geom from flatiron where cartodb_id=1)::geography,100)"
 
 			// Endpoint for CARTO SQL API
 			var endpoint = "https://" + cartoUser + ".carto.com/api/v2/sql?format=GeoJSON&q=";
@@ -93,6 +108,82 @@
 			// Full url to use in $.getJSON call
 			var url = endpoint + sqlProxFlatiron;
 
+
+
+
+
+			// -------------------- CONTROL SETUP -----------------------
+
+			// control to show sign description in top right of screen on hover
+			var info = L.control();
+
+			info.onAdd = function (map) {
+				this._div = L.DomUtil.create('div', 'info');	// create a div with class "info"
+				this.update();
+				return this._div;
+			};
+
+			// Method used to update control based on feature properties passed
+			info.update = function (props) {
+				this._div.innerHTML = '<h4>Sign Description</h4>' + (props ? '<b>' +props.sign_desc + '</b><br />' + props.sign_id : 'Hover over a sign');
+			};
+
+			// add control to map
+			info.addTo(map);
+
+
+
+			// -------------------- SIGN FUNCTIONS -----------------------
+
+			// Determines events when feature is hovered over
+			function highlightFeature(e) {
+				var layer = e.target;
+
+				layer.setStyle({
+					weight: 5,
+					color: '#666',
+					fillOpacity: 0.5
+				});
+
+				// handling for other browsers??? included in online example
+				if (!L.Browser.ie && !L.Browser.opera && !L.Browser.edge) {
+					layer.bringToFront();
+				};
+
+				// call to control functions to show sign description in upper right corner
+				info.update(layer.feature.properties);
+
+				console.log("sign_desc: " + layer.feature.properties.sign_desc);
+			};
+
+			// Removes styling/displays when feature is not hovered over
+			function resetHighlight(e) {
+				mSignLayer.resetStyle(e.target);
+
+				// pass nothing to info method
+				info.update();
+			};
+
+			// pointToLayer function for placing circle markers on map
+			function plotMSigns(feature,latlng) {
+				return L.circleMarker(latlng, signMarkerOptions)
+					.bindTooltip(feature.properties.sign_desc).openTooltip();	// adds a tooltip to each marker
+			};
+
+			// onEachFeature function for each sign
+			function onEachMSign(feature,layer) {
+				layer.on({
+					mouseover: highlightFeature,
+					mouseout: resetHighlight,
+				});
+
+				console.log("---> cartoID: " + layer.feature.properties.cartodb_id + " sign_id: " + layer.feature.properties.sign_id + " sign_desc: " + feature.properties.sign_desc);
+
+			};
+
+
+
+			// -------------------- MAIN FUNCTION -----------------------
 
 			// Displays signs per SQL query to CARTO tables API
 			function showSigns(){
@@ -104,15 +195,11 @@
 					map.removeLayer(mSignLayer);
 				};
 
-				// Get data from CARTO in GeoJSON format and add to map
-				// Run function that applies GeoJSON to map and creates point marker that includes sign_desc
+				// jQuery function to retrieve data from CARTO DB
 				$.getJSON(url, function(data) {
-					console.log("$.getJSON called");
-					mSignLayer = L.geoJson(data, {
-						onEachFeature: function(feature, layer) {
-							console.log("sign_desc: " + feature.properties.sign_desc);
-							layer.bindPopup('<p>' + feature.properties.sign_desc + '</p>');
-						}
+					mSignLayer = L.geoJSON(data, {
+						pointToLayer: plotMSigns,	// function to place circle markers for sign on map
+						onEachFeature: onEachMSign	// function to 
 					}).addTo(map);
 				})
 				// Alert when getJSON succeeds
@@ -124,6 +211,7 @@
 				.fail(function() {
 					alert( "$.getJSON failed");
 				});
+
 				console.log("showSigns() ended");
 			};
 
